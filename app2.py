@@ -103,6 +103,83 @@ def slugify_trainer(name):
 # Config management
 # ─────────────────────────────────────
 
+from datetime import datetime, timedelta
+import json
+from pathlib import Path
+
+CONFIG_PATH = Path(__file__).with_name("config.json")
+
+def load_config():
+    default_config = {
+        "default_date": "2026/05/17",
+        "default_course": "ST",
+        "auto_schedule": True,
+        "schedule": []
+    }
+
+    if not CONFIG_PATH.exists():
+        save_config(default_config)
+        return default_config
+
+    try:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            config = json.load(f)
+        for k, v in default_config.items():
+            config.setdefault(k, v)
+        return config
+    except Exception as e:
+        logger.exception("load_config failed: %s", e)
+        return default_config
+
+def save_config(config):
+    try:
+        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+            json.dump(config, f, ensure_ascii=False, indent=2)
+        logger.info("Config saved to %s", CONFIG_PATH)
+        return True
+    except Exception as e:
+        logger.exception("save_config failed: %s", e)
+        return False
+
+def get_next_race_day():
+    config = load_config()
+    schedule = config.get("schedule", [])
+
+    today = datetime.now().strftime("%Y/%m/%d")
+
+    for day in schedule:
+        date_str = day.get("date", "")
+        course = day.get("course", "ST")
+        if date_str >= today:
+            return date_str, course
+
+    if schedule:
+        day = schedule[0]
+        return day.get("date", today), day.get("course", "ST")
+
+    return today, "ST"
+
+@app.route("/auto-set-schedule", methods=["POST"])
+@login_required
+def auto_set_schedule():
+    config = load_config()
+    next_date, next_course = get_next_race_day()
+
+    config["default_date"] = next_date
+    config["default_course"] = next_course
+    config["auto_schedule"] = True
+
+    ok = save_config(config)
+    if not ok:
+        return jsonify({"status": "error", "message": "save_config failed"}), 500
+
+    return jsonify({
+        "status": "success",
+        "message": f"自動設定完成：{next_date} {next_course}",
+        "config": config
+    })
+
+
 
 # 🔥 取代原有 load_config() + 新增 auto_schedule()
 def load_config():
@@ -145,17 +222,28 @@ def generate_race_links(config):
 @login_required
 def config_page():
     config = load_config()
+
     if request.method == "POST":
         new_config = request.get_json() or {}
-        config.update(new_config)
-        save_config(config)
+
+        config["default_date"] = new_config.get("default_date", config.get("default_date"))
+        config["default_course"] = new_config.get("default_course", config.get("default_course"))
+        config["auto_schedule"] = new_config.get("auto_schedule", config.get("auto_schedule", True))
+
+        if "schedule" in new_config and isinstance(new_config["schedule"], list):
+            config["schedule"] = new_config["schedule"]
+
+        ok = save_config(config)
+        if not ok:
+            return jsonify({"status": "error", "message": "save_config failed"}), 500
+
         return jsonify({"status": "success", "config": config})
-    
+
     return render_template("config.html", config=config, race_links=generate_race_links(config))
 
 
 def get_default_config():
-    now = datetime.datetime.now()
+    now = datetime.now()
     return {
         "racedate": now.strftime("%Y/%m/%d"),
         "racecourse": "ST",
@@ -476,53 +564,50 @@ def fetch_race_info(raceno, racedate="2026/05/17", racecourse="ST"):
     }
 
 
-def load_all_race_buttons_from_hkjc(date="2026/05/17", course="ST"):  # 🔥 加 date/course 參數
-    """用指定日期/場地抓 R1–R11"""
+def load_all_race_buttons_from_hkjc(session_date, session_course):
     data = {}
     with ThreadPoolExecutor(max_workers=5) as exe:
-        futures = [exe.submit(fetch_race_info, i, date, course) for i in range(1, 12)]  # 🔥 傳 date/course
+        futures = [exe.submit(fetch_race_info, i, session_date, session_course) for i in range(1, 12)]
         for future in futures:
             r = future.result(timeout=15)
             if r:
                 data[r["id"]] = r
 
     session["race_buttons"] = data
-    session["race_buttons_updated_at"] = datetime.datetime.now().isoformat()
-    session["config_date"] = date
-    session["config_course"] = course
+    session["race_buttons_cache_key"] = f"{session_date}_{session_course}"
+    session["race_buttons_updated_at"] = datetime.now().isoformat()
+    session["session_config_date"] = session_date
+    session["session_config_course"] = session_course
     session.modified = True
-    logger.info(f"✅ 刷新按鈕：{date} {course}")
+
+    logger.info("Loaded race buttons for %s %s", session_date, session_course)
     return data
 
 
 def get_race_buttons():
     config = load_config()
-    
-    # 🔥 強制用最新 config
-    session_date = config["default_date"]  # 永遠用 config，唔用舊 session
-    session_course = config["default_course"]
-    
-    # 🔥 永久 cache，只在 config 變更時重抓
+    session_date = config.get("default_date", "2026/05/17")
+    session_course = config.get("default_course", "ST")
+
     cache_key = f"{session_date}_{session_course}"
-    if "race_buttons_cache" not in session or session["race_buttons_cache"] != cache_key:
-        logger.info(f"🔄 重抓按鈕：{cache_key}")
-        buttons = load_all_race_buttons_from_hkjc(session_date, session_course)
-        session["race_buttons"] = buttons
-        session["race_buttons_cache"] = cache_key
-        session["race_buttons_updated_at"] = datetime.datetime.now().isoformat()
-        session.modified = True
-        return buttons
-    
-    # 檢查 30分鐘過期
-    ts = datetime.datetime.fromisoformat(session["race_buttons_updated_at"])
-    if datetime.datetime.now() - ts > datetime.timedelta(minutes=30):
-        logger.info(f"⏰ 過期重抓：{cache_key}")
-        buttons = load_all_race_buttons_from_hkjc(session_date, session_course)
-        session["race_buttons"] = buttons
-        session["race_buttons_updated_at"] = datetime.datetime.now().isoformat()
-        session.modified = True
-        return buttons
-    
+
+    if (
+        "race_buttons" not in session
+        or session.get("race_buttons_cache_key") != cache_key
+        or "race_buttons_updated_at" not in session
+    ):
+        logger.info("Cache miss, loading race buttons: %s", cache_key)
+        return load_all_race_buttons_from_hkjc(session_date, session_course)
+
+    try:
+        ts = datetime.fromisoformat(session["race_buttons_updated_at"])
+        if datetime.now() - ts > timedelta(minutes=30):
+            logger.info("Cache expired, reloading race buttons: %s", cache_key)
+            return load_all_race_buttons_from_hkjc(session_date, session_course)
+    except Exception:
+        logger.exception("Invalid race_buttons_updated_at, reloading")
+        return load_all_race_buttons_from_hkjc(session_date, session_course)
+
     return session["race_buttons"]
 
 
@@ -919,7 +1004,7 @@ def debug_db():
 @login_required
 def standards():
     standards = fetch_standard_times()
-    now = datetime.datetime.now()
+    now = datetime.now()
     return render_template(
         "standards.html",
         standards=standards,
@@ -1051,29 +1136,7 @@ def open_browser():
         race_buttons=get_race_buttons()
     )
 
-def fetch_standard_times():
-    data = {
-        "ST_1000": {"G": "0.55.90", "1": "-", "2": "0.56.05", "3": "0.56.45", "4": "0.56.65", "5": "0.57.00", "M": "0.56.65"},
-        "ST_1200": {"G": "1.08.15", "1": "1.08.45", "2": "1.08.65", "3": "1.09.00", "4": "1.09.35", "5": "1.09.55", "M": "1.09.90"},
-        "ST_1400": {"G": "1.21.10", "1": "1.21.25", "2": "1.21.45", "3": "1.21.65", "4": "1.22.00", "5": "1.22.30", "M": "-"},
-        "ST_1600": {"G": "1.33.90", "1": "1.34.05", "2": "1.34.25", "3": "1.34.70", "4": "1.34.90", "5": "1.35.45", "M": "-"},
-        "ST_1800": {"G": "1.47.10", "1": "-", "2": "1.47.30", "3": "1.47.50", "4": "1.47.85", "5": "1.48.45", "M": "-"},
-        "ST_2000": {"G": "2.00.50", "1": "2.01.20", "2": "2.01.70", "3": "2.01.90", "4": "2.02.35", "5": "2.02.65", "M": "-"},
-        "ST_2400": {"G": "2.27.00", "1": "-", "2": "-", "3": "-", "4": "-", "5": "-", "M": "-"},
-        "HV_1000": {"G": "-", "1": "-", "2": "0.56.40", "3": "0.56.65", "4": "0.57.20", "5": "0.57.35", "M": "-"},
-        "HV_1200": {"G": "-", "1": "1.09.10", "2": "1.09.30", "3": "1.09.60", "4": "1.09.90", "5": "1.10.10", "M": "-"},
-        "HV_1650": {"G": "-", "1": "1.39.10", "2": "1.39.30", "3": "1.39.90", "4": "1.40.10", "5": "1.40.30", "M": "-"},
-        "HV_1800": {"G": "1.48.95", "1": "-", "2": "1.49.15", "3": "1.49.45", "4": "1.49.65", "5": "1.49.95", "M": "-"},
-        "HV_2200": {"G": "-", "1": "-", "2": "-", "3": "-", "4": "2.16.60", "5": "2.17.05", "M": "-"},
-        "AW_1200": {"G": "-", "1": "-", "2": "1.08.35", "3": "1.08.55", "4": "1.08.95", "5": "1.09.35", "M": "-"},
-        "AW_1650": {"G": "-", "1": "1.37.80", "2": "1.38.40", "3": "1.38.60", "4": "1.39.05", "5": "1.39.45", "M": "-"},
-        "AW_1800": {"G": "-", "1": "-", "2": "-", "3": "-", "4": "1.48.05", "5": "1.48.55", "M": "-"},
-    }
-    with open("standard_times.json", "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
-    logger.info(f"✅ HKJC 標準時間載入：{len(data)} 組")
-    return data
-
+from data.standard_times import fetch_standard_times
 
 @app.errorhandler(404)
 def page_not_found(e):
@@ -1306,6 +1369,17 @@ def api_horse_history():
     except Exception as e:
         return jsonify({"ok": False, "error": str(e)}), 500
 
+
+from data.turf_data import TURF_GOING_TABLE, RACECOURSE_TRACKS
+@app.route("/turf")
+@login_required
+def turf_page():
+    return render_template(
+        "turf.html",
+        turf_table=TURF_GOING_TABLE,
+        racecourse_tracks=RACECOURSE_TRACKS,
+        topbarlinks=TOPBAR_LINKS
+    )
 
 if __name__ == "__main__":
     app.run(debug=True, host="0.0.0.0", port=5000)

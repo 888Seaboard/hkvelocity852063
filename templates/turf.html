@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}草地跑道研究 - HKVelocity{% endblock %}
+
+{% block content %}
+<style>
+    .container {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 24px;
+    }
+    .panel {
+        background: #161a22;
+        padding: 24px;
+        border-radius: 16px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+        margin-bottom: 24px;
+    }
+    h1, h2, h3 {
+        color: #ffd700;
+        margin-top: 0;
+    }
+    p {
+        opacity: 0.9;
+        line-height: 1.6;
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 20px;
+    }
+    th, td {
+        border-bottom: 1px solid #333;
+        padding: 12px 10px;
+        text-align: left;
+        vertical-align: top;
+    }
+    th {
+        color: #ffd700;
+    }
+    tr:hover {
+        background: rgba(255,215,0,0.06);
+    }
+    .badge {
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 999px;
+        background: #222;
+        color: #ffd700;
+        font-size: 12px;
+        font-weight: bold;
+    }
+    .course-block {
+        margin-top: 18px;
+    }
+    .subtle {
+        opacity: 0.75;
+        font-size: 14px;
+    }
+    .toplink {
+        display: inline-block;
+        margin-bottom: 16px;
+        color: #ffd700;
+        text-decoration: none;
+        font-weight: bold;
+    }
+    .toplink:hover {
+        text-decoration: underline;
+    }
+</style>
+
+<div class="container">
+    <a href="{{ url_for('home') }}" class="toplink">← 回首頁</a>
+
+    <div class="panel">
+        <h1>草地跑道研究</h1>
+        <p>這頁專門整理草地跑道狀況、度地儀指數、場地分類，以及沙田與跑馬地的跑道資料。</p>
+
+        <h2>場地狀況 / 度地儀指數</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>場地狀況</th>
+                    <th>代碼</th>
+                    <th>度地儀指數</th>
+                    <th>備註</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in turf_table %}
+                <tr>
+                    <td>{{ row.name }}</td>
+                    <td><span class="badge">{{ row.code }}</span></td>
+                    <td>{{ row.index }}</td>
+                    <td>{{ row.desc }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+
+    <div class="panel">
+        <h2>沙田 / 跑馬地跑道資料</h2>
+        <p class="subtle">以下資料可用來研究不同賽道代號、直路長度與闊度。</p>
+
+        {% for course_code, rows in racecourse_tracks.items() %}
+        <div class="course-block">
+            <h3>{{ '沙田' if course_code == 'ST' else '跑馬地' }}</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>代號</th>
+                        <th>跑道</th>
+                        <th>直路長度</th>
+                        <th>闊度</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in rows %}
+                    <tr>
+                        <td><span class="badge">{{ row.code }}</span></td>
+                        <td>{{ row.name }}</td>
+                        <td>{{ row.straight }}</td>
+                        <td>{{ row.width }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

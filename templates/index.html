@@ -73,14 +73,16 @@
     <aside class="home-right">
         <!-- 🔥 只保留原有兩個 panel -->
         <div class="quad">
-            <div class="panel-title">品題馬匹</div>
+            <div class="panel-title">
+                <a href="{{ url_for('turf_page') }}" style="color: inherit; text-decoration: none;">
+                    草地跑道研究
+                </a>
+            </div>
             <div class="detail-list">
-                {% for horse in featured_horses or [] %}
                 <div class="detail-row">
-                    <span>{{ horse.name }}</span>
-                    <div><a href="#">Open</a></div>
+                    <span>進入草地跑道研究頁</span>
+                    <div><a href="{{ url_for('turf_page') }}">Open</a></div>
                 </div>
-                {% endfor %}
             </div>
         </div>
 

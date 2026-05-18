@@ -127,8 +127,22 @@ function switchSchedule(idx) {
 }
 
 function autoUpdate() {
-    fetch('/force-refresh-races').then(()=>alert('✅ 更新完成！')).then(()=>location.reload());
+    fetch('/auto-set-schedule', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({})
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.status === 'success') {
+            alert('✅ ' + data.message);
+            location.reload();
+        } else {
+            alert('❌ 自動更新失敗');
+        }
+    });
 }
+
 </script>
 </body>
 </html>

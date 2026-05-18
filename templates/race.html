@@ -25,8 +25,6 @@
                             <th>配備</th>
                             <th>馬主</th>
                             <th>父系</th>
-                            <th>母系</th>
-                            <th>進口類別</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -55,8 +53,6 @@
                             <td>{{ horse.gear or '-' }}</td>
                             <td class="wrap">{{ horse.owner or '-' }}</td>
                             <td class="wrap">{{ horse.sire or '-' }}</td>
-                            <td class="wrap">{{ horse.dam or '-' }}</td>
-                            <td>{{ horse.import_type or '-' }}</td>
                         </tr>
                         {% endfor %}
                         {% else %}
