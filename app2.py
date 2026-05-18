@@ -46,10 +46,8 @@ logger = logging.getLogger(__name__)
 # 在 app.py 頂部先定義 global 常數
 # ─────────────────────────────────────
 
-
 BASE_RACECARD_URL = "https://racing.hkjc.com/zh-hk/local/information/racecard"
 CHROME_CDP_URL = os.environ.get("CHROME_CDP_URL", "http://chrome:9222")
-
 
 TOPBAR_LINKS = [
     {"label": "賽期表", "url": "https://racing.hkjc.com/zh-hk/local/information/fixture", "desc": "查看賽期安排"},
@@ -58,11 +56,9 @@ TOPBAR_LINKS = [
     {"label": "特別獎金馬", "url": "https://racing.hkjc.com/zh-hk/local/page/fwb-declared-starters", "desc": "查看特別獎金馬"},
 ]
 
-
 USERS = {
     "toveythuang": generate_password_hash(os.environ.get("APP_PASSWORD", "HongKong852!"))
 }
-
 
 LOCAL_FALLBACK_HORSES = {
     1: {"id": 1, "name": "嘉應高昇", "trainer": "大衛希斯", "trainer_id": "david_hayes", "draw": "1", "weight": "126", "rating": "140", "form": "1-1-1", "official_link": "https://racing.hkjc.com/zh-hk/local/information/horse?horseid=HK_2023_J062"},
@@ -70,7 +66,6 @@ LOCAL_FALLBACK_HORSES = {
     3: {"id": 3, "name": "燈胆將軍", "trainer": "黎昭昇", "trainer_id": "richard_lee", "draw": "3", "weight": "121", "rating": "92", "form": "2-3-1", "official_link": "https://racing.hkjc.com/zh-hk/local/information/horse?horseid=HK_2024_K218"},
     4: {"id": 4, "name": "美麗星晨", "trainer": "告東尼", "trainer_id": "tony_cruz", "draw": "4", "weight": "120", "rating": "88", "form": "4-2-2", "official_link": "https://racing.hkjc.com/zh-hk/local/information/horse?horseid=HK_2024_K491"},
 }
-
 
 LOCAL_FALLBACK_TRAINERS = {
     "david_hayes": {"name": "大衛希斯", "horses": [1]},
