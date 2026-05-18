@@ -109,38 +109,6 @@ from pathlib import Path
 
 CONFIG_PATH = Path(__file__).with_name("config.json")
 
-def load_config():
-    default_config = {
-        "default_date": "2026/05/17",
-        "default_course": "ST",
-        "auto_schedule": True,
-        "schedule": []
-    }
-
-    if not CONFIG_PATH.exists():
-        save_config(default_config)
-        return default_config
-
-    try:
-        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-            config = json.load(f)
-        for k, v in default_config.items():
-            config.setdefault(k, v)
-        return config
-    except Exception as e:
-        logger.exception("load_config failed: %s", e)
-        return default_config
-
-def save_config(config):
-    try:
-        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-            json.dump(config, f, ensure_ascii=False, indent=2)
-        logger.info("Config saved to %s", CONFIG_PATH)
-        return True
-    except Exception as e:
-        logger.exception("save_config failed: %s", e)
-        return False
-
 def get_next_race_day():
     config = load_config()
     schedule = config.get("schedule", [])
@@ -202,20 +170,12 @@ def load_config():
         logger.info("✅ 新建 config.json")
         return default_config
 
-def generate_race_links(config):
-    """根據 config 自動生成所有 R1-R11 link"""
-    links = []
-    default_date = config.get("default_date", "2026/05/17")
-    default_course = config.get("default_course", "ST")
-    
-    for i in range(1, 12):
-        link = f"https://racing.hkjc.com/zh-hk/local/information/racecard?racedate={default_date}&Racecourse={default_course}&RaceNo={i}"
-        links.append({
-            "race_no": i,
-            "url": link,
-            "title": f"R{i} - {default_date} {default_course}"
-        })
-    return links
+from utils.config_utils import (
+    load_config,
+    save_config,
+    generate_race_links,
+    auto_update_schedule,
+)
 
 # 🔥 新增 config 編輯頁 route
 @app.route("/config", methods=["GET", "POST"])
@@ -259,55 +219,6 @@ def get_default_config():
             for i in range(1, 12)
         ],
     }
-
-
-def save_config(config):
-    config_path = os.path.join(os.path.dirname(__file__), "config.json")
-    try:
-        with open(config_path, "w", encoding="utf-8") as f:
-            json.dump(config, f, ensure_ascii=False, indent=2)
-        logger.info(f"✅ Config saved to {config_path}")
-        return True
-    except Exception as e:
-        logger.error(f"❌ Failed to save config: {e}")
-        return False
-
-def auto_update_schedule():
-    """自動從 fixture 頁抓最新賽期，更新 config.schedule"""
-    config = load_config()
-    if not config.get("auto_schedule", False):
-        return
-    
-    try:
-        resp = requests.get("https://racing.hkjc.com/zh-hk/local/information/fixture", timeout=10)
-        soup = BeautifulSoup(resp.text, "html.parser")
-        text = soup.get_text()
-        
-        # 解析日期模式 (改進版)
-        dates = []
-        date_patterns = [
-            r"(\d{1,2})[月\/\-\s]+(\w+)[日賽]",
-            r"(\d{1,2})[月\/\-\s]+(\d{1,2})[日賽]"
-        ]
-        
-        for pattern in date_patterns:
-            matches = re.finditer(pattern, text)
-            for match in matches:
-                day = match.group(1)
-                course = match.group(2) if len(match.groups()) > 1 else "ST"
-                dates.append({
-                    "date": f"2026/05/{day.zfill(2)}",
-                    "course": "ST" if "沙田" in text else "HV",
-                    "name": f"5/{day} 賽事"
-                })
-        
-        if dates:
-            config["schedule"] = dates[:5]  # 取最近5場
-            save_config(config)
-            logger.info(f"✅ 自動更新賽期：{len(dates)} 場")
-            
-    except Exception as e:
-        logger.warning(f"自動賽期失敗：{e}")
 
 
 # ─────────────────────────────────────

@@ -1,0 +1,101 @@
+import os
+import json
+import re
+import requests
+import logging
+from pathlib import Path
+from bs4 import BeautifulSoup
+
+logger = logging.getLogger(__name__)
+CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.json"
+
+def load_config():
+    default_config = {
+        "default_date": "2026/05/17",
+        "default_course": "ST",
+        "auto_schedule": True,
+        "schedule": []
+    }
+
+    if not CONFIG_PATH.exists():
+        save_config(default_config)
+        return default_config
+
+    try:
+        with open(CONFIG_PATH, "r", encoding="utf-8") as f:
+            config = json.load(f)
+        config.setdefault("default_date", default_config["default_date"])
+        config.setdefault("default_course", default_config["default_course"])
+        config.setdefault("auto_schedule", default_config["auto_schedule"])
+        config.setdefault("schedule", default_config["schedule"])
+        return config
+    except Exception as e:
+        logger.exception("load_config failed: %s", e)
+        return default_config
+
+def save_config(config):
+    try:
+        with open(CONFIG_PATH, "w", encoding="utf-8") as f:
+            json.dump(config, f, ensure_ascii=False, indent=2)
+        logger.info("✅ Config saved to %s", CONFIG_PATH)
+        return True
+    except Exception as e:
+        logger.exception("save_config failed: %s", e)
+        return False
+
+def generate_race_links(config):
+    links = []
+    default_date = config.get("default_date", "2026/05/17")
+    default_course = config.get("default_course", "ST")
+
+    for i in range(1, 12):
+        link = (
+            "https://racing.hkjc.com/zh-hk/local/information/racecard"
+            f"?racedate={default_date}&Racecourse={default_course}&RaceNo={i}"
+        )
+        links.append({
+            "race_no": i,
+            "url": link,
+            "title": f"R{i} - {default_date} {default_course}"
+        })
+    return links
+
+def auto_update_schedule():
+    config = load_config()
+    if not config.get("auto_schedule", False):
+        return config
+
+    try:
+        resp = requests.get(
+            "https://racing.hkjc.com/zh-hk/local/information/fixture",
+            timeout=10
+        )
+        resp.raise_for_status()
+        soup = BeautifulSoup(resp.text, "html.parser")
+        text = soup.get_text()
+
+        dates = []
+        date_patterns = [
+            r"(\d{1,2})[月\/\-\s]+(\w+)[日賽]",
+            r"(\d{1,2})[月\/\-\s]+(\d{1,2})[日賽]"
+        ]
+
+        for pattern in date_patterns:
+            for match in re.finditer(pattern, text):
+                day = match.group(1)
+                dates.append({
+                    "date": f"2026/05/{day.zfill(2)}",
+                    "course": "ST" if "沙田" in text else "HV",
+                    "name": f"5/{day} 賽事"
+                })
+
+        if dates:
+            config["schedule"] = dates[:5]
+            save_config(config)
+            logger.info("✅ 自動更新賽期：%d 場", len(config["schedule"]))
+
+        return config
+
+    except Exception as e:
+        logger.warning("自動賽期失敗：%s", e)
+        return config
