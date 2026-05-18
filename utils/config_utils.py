@@ -1,21 +1,23 @@
 import json
 import re
-import requests
 import logging
+from datetime import datetime
 from pathlib import Path
+
+import requests
 from bs4 import BeautifulSoup
 
 logger = logging.getLogger(__name__)
-CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.json"
+CONFIG_PATH = Path(__file__).resolve().parent.parent / "data" / "config.json"
 
-def load_config():
-    DEFAULT_CONFIG = {
+DEFAULT_CONFIG = {
     "default_date": "2026/05/17",
     "default_course": "ST",
     "auto_schedule": True,
     "schedule": []
-    }
+}
 
+def load_config():
     if not CONFIG_PATH.exists():
         save_config(DEFAULT_CONFIG)
         return DEFAULT_CONFIG.copy()
@@ -23,10 +25,8 @@ def load_config():
     try:
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
             config = json.load(f)
-        config.setdefault("default_date", DEFAULT_CONFIG["default_date"])
-        config.setdefault("default_course", DEFAULT_CONFIG["default_course"])
-        config.setdefault("auto_schedule", DEFAULT_CONFIG["auto_schedule"])
-        config.setdefault("schedule", DEFAULT_CONFIG["schedule"])
+        for k, v in DEFAULT_CONFIG.items():
+            config.setdefault(k, v)
         return config
     except Exception as e:
         logger.exception("load_config failed: %s", e)
@@ -34,6 +34,7 @@ def load_config():
 
 def save_config(config):
     try:
+        CONFIG_PATH.parent.mkdir(parents=True, exist_ok=True)
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(config, f, ensure_ascii=False, indent=2)
         logger.info("✅ Config saved to %s", CONFIG_PATH)
@@ -44,8 +45,8 @@ def save_config(config):
 
 def generate_race_links(config):
     links = []
-    default_date = config.get("default_date", "2026/05/17")
-    default_course = config.get("default_course", "ST")
+    default_date = config.get("default_date", DEFAULT_CONFIG["default_date"])
+    default_course = config.get("default_course", DEFAULT_CONFIG["default_course"])
 
     for i in range(1, 12):
         link = (
@@ -58,6 +59,23 @@ def generate_race_links(config):
             "title": f"R{i} - {default_date} {default_course}"
         })
     return links
+
+def get_next_race_day():
+    config = load_config()
+    schedule = config.get("schedule", [])
+    today = datetime.now().strftime("%Y/%m/%d")
+
+    for day in schedule:
+        date_str = day.get("date", "")
+        course = day.get("course", "ST")
+        if date_str >= today:
+            return date_str, course
+
+    if schedule:
+        day = schedule[0]
+        return day.get("date", today), day.get("course", "ST")
+
+    return today, "ST"
 
 def auto_update_schedule():
     config = load_config()
@@ -98,21 +116,3 @@ def auto_update_schedule():
     except Exception as e:
         logger.warning("自動賽期失敗：%s", e)
         return config
-    
-def get_next_race_day():
-    config = load_config()
-    schedule = config.get("schedule", [])
-
-    today = datetime.now().strftime("%Y/%m/%d")
-
-    for day in schedule:
-        date_str = day.get("date", "")
-        course = day.get("course", "ST")
-        if date_str >= today:
-            return date_str, course
-
-    if schedule:
-        day = schedule[0]
-        return day.get("date", today), day.get("course", "ST")
-
-    return today, "ST"

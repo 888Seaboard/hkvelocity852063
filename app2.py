@@ -8,7 +8,7 @@ import threading
 import requests
 import re
 import json
-import datetime
+from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 from bs4 import BeautifulSoup
 from flask import (
@@ -102,12 +102,13 @@ def slugify_trainer(name):
 # ─────────────────────────────────────
 # Config management
 # ─────────────────────────────────────
-
-from datetime import datetime, timedelta
-import json
-from pathlib import Path
-
-CONFIG_PATH = Path(__file__).with_name("config.json")
+from utils.config_utils import (
+    load_config,
+    save_config,
+    generate_race_links,
+    auto_update_schedule,
+    get_next_race_day,
+)
 
 @app.route("/auto-set-schedule", methods=["POST"])
 @login_required
@@ -128,14 +129,6 @@ def auto_set_schedule():
         "message": f"自動設定完成：{next_date} {next_course}",
         "config": config
     })
-
-from utils.config_utils import (
-    load_config,
-    save_config,
-    generate_race_links,
-    auto_update_schedule,
-    get_next_race_day,
-)
 
 # 🔥 新增 config 編輯頁 route
 @app.route("/config", methods=["GET", "POST"])
@@ -161,7 +154,6 @@ def config_page():
 
     return render_template("config.html", config=config, race_links=generate_race_links(config))
 
-
 def get_default_config():
     now = datetime.now()
     return {
@@ -179,7 +171,6 @@ def get_default_config():
             for i in range(1, 12)
         ],
     }
-
 
 # ─────────────────────────────────────
 # parse_racecard_page
