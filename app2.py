@@ -109,24 +109,6 @@ from pathlib import Path
 
 CONFIG_PATH = Path(__file__).with_name("config.json")
 
-def get_next_race_day():
-    config = load_config()
-    schedule = config.get("schedule", [])
-
-    today = datetime.now().strftime("%Y/%m/%d")
-
-    for day in schedule:
-        date_str = day.get("date", "")
-        course = day.get("course", "ST")
-        if date_str >= today:
-            return date_str, course
-
-    if schedule:
-        day = schedule[0]
-        return day.get("date", today), day.get("course", "ST")
-
-    return today, "ST"
-
 @app.route("/auto-set-schedule", methods=["POST"])
 @login_required
 def auto_set_schedule():
@@ -147,34 +129,12 @@ def auto_set_schedule():
         "config": config
     })
 
-
-
-# 🔥 取代原有 load_config() + 新增 auto_schedule()
-def load_config():
-    config_path = os.path.join(os.path.dirname(__file__), "config.json")
-    default_config = {
-        "default_date": "2026/05/17",
-        "default_course": "ST", 
-        "schedule": []
-    }
-    try:
-        with open(config_path, "r", encoding="utf-8") as f:
-            config = json.load(f)
-            config.setdefault("default_date", default_config["default_date"])
-            config.setdefault("default_course", default_config["default_course"])
-            return config
-    except:
-        # 自動生成
-        with open(config_path, "w", encoding="utf-8") as f:
-            json.dump(default_config, f, ensure_ascii=False, indent=2)
-        logger.info("✅ 新建 config.json")
-        return default_config
-
 from utils.config_utils import (
     load_config,
     save_config,
     generate_race_links,
     auto_update_schedule,
+    get_next_race_day,
 )
 
 # 🔥 新增 config 編輯頁 route

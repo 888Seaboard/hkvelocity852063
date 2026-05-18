@@ -1,4 +1,3 @@
-import os
 import json
 import re
 import requests
@@ -10,28 +9,28 @@ logger = logging.getLogger(__name__)
 CONFIG_PATH = Path(__file__).resolve().parent.parent / "config.json"
 
 def load_config():
-    default_config = {
-        "default_date": "2026/05/17",
-        "default_course": "ST",
-        "auto_schedule": True,
-        "schedule": []
+    DEFAULT_CONFIG = {
+    "default_date": "2026/05/17",
+    "default_course": "ST",
+    "auto_schedule": True,
+    "schedule": []
     }
 
     if not CONFIG_PATH.exists():
-        save_config(default_config)
-        return default_config
+        save_config(DEFAULT_CONFIG)
+        return DEFAULT_CONFIG.copy()
 
     try:
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
             config = json.load(f)
-        config.setdefault("default_date", default_config["default_date"])
-        config.setdefault("default_course", default_config["default_course"])
-        config.setdefault("auto_schedule", default_config["auto_schedule"])
-        config.setdefault("schedule", default_config["schedule"])
+        config.setdefault("default_date", DEFAULT_CONFIG["default_date"])
+        config.setdefault("default_course", DEFAULT_CONFIG["default_course"])
+        config.setdefault("auto_schedule", DEFAULT_CONFIG["auto_schedule"])
+        config.setdefault("schedule", DEFAULT_CONFIG["schedule"])
         return config
     except Exception as e:
         logger.exception("load_config failed: %s", e)
-        return default_config
+        return DEFAULT_CONFIG.copy()
 
 def save_config(config):
     try:
@@ -99,3 +98,21 @@ def auto_update_schedule():
     except Exception as e:
         logger.warning("自動賽期失敗：%s", e)
         return config
+    
+def get_next_race_day():
+    config = load_config()
+    schedule = config.get("schedule", [])
+
+    today = datetime.now().strftime("%Y/%m/%d")
+
+    for day in schedule:
+        date_str = day.get("date", "")
+        course = day.get("course", "ST")
+        if date_str >= today:
+            return date_str, course
+
+    if schedule:
+        day = schedule[0]
+        return day.get("date", today), day.get("course", "ST")
+
+    return today, "ST"
